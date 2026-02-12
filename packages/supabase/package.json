@@ -1,0 +1,15 @@
+{
+    "name": "@aplikasi-rukun/supabase",
+    "version": "0.0.0",
+    "private": true,
+    "scripts": {
+        "start": "supabase start",
+        "stop": "supabase stop",
+        "status": "supabase status",
+        "db:push": "supabase db push",
+        "gen:types": "supabase gen types typescript --local > types/database.ts"
+    },
+    "devDependencies": {
+        "supabase": "^1.110.1"
+    }
+}
