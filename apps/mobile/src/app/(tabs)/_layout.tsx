@@ -5,6 +5,7 @@ import { View, Platform, Easing, Dimensions } from "react-native";
 import { primeActiveTab, syncActiveTabFromNavigatorState } from "./tab-transition";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
+const ACTIVE_TAB_ICON_COLOR = "#FF7E5F";
 
 export default function TabLayout() {
     useEffect(() => {
@@ -92,7 +93,7 @@ export default function TabLayout() {
                                 borderRadius: 12,
                             }}
                         >
-                            <Ionicons name="home" size={24} color={color} />
+                            <Ionicons name="home" size={24} color={focused ? ACTIVE_TAB_ICON_COLOR : color} />
                         </View>
                     ),
                 }}
@@ -109,8 +110,8 @@ export default function TabLayout() {
                             transform: [{ translateX: 0 }],
                         },
                     }),
-                    tabBarIcon: ({ color }) => (
-                        <Ionicons name="receipt-outline" size={24} color={color} />
+                    tabBarIcon: ({ color, focused }) => (
+                        <Ionicons name="receipt-outline" size={24} color={focused ? ACTIVE_TAB_ICON_COLOR : color} />
                     ),
                 }}
             />
@@ -126,8 +127,8 @@ export default function TabLayout() {
                             transform: [{ translateX: 0 }],
                         },
                     }),
-                    tabBarIcon: ({ color }) => (
-                        <Ionicons name="construct-outline" size={24} color={color} />
+                    tabBarIcon: ({ color, focused }) => (
+                        <Ionicons name="construct-outline" size={24} color={focused ? ACTIVE_TAB_ICON_COLOR : color} />
                     ),
                 }}
             />
@@ -135,8 +136,16 @@ export default function TabLayout() {
                 name="more"
                 options={{
                     title: "More",
-                    tabBarIcon: ({ color }) => (
-                        <Ionicons name="grid-outline" size={24} color={color} />
+                    lazy: false,
+                    animation: "none",
+                    sceneStyleInterpolator: () => ({
+                        sceneStyle: {
+                            opacity: 1,
+                            transform: [{ translateX: 0 }],
+                        },
+                    }),
+                    tabBarIcon: ({ color, focused }) => (
+                        <Ionicons name="grid-outline" size={24} color={focused ? ACTIVE_TAB_ICON_COLOR : color} />
                     ),
                 }}
             />

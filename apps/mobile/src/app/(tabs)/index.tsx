@@ -1,32 +1,78 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, Dimensions, Animated, Easing } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useIsFocused } from "@react-navigation/native";
+import { useRouter } from "expo-router";
 import { useTabTransition } from "./tab-transition";
+import { consumeSkipAnimationForTab, setNotificationSourceTab } from "../notification-navigation-state";
+import { fetchMe, getPersistedSession } from "../../services/auth";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const HEADER_TOP_RADIUS = 40;
 const HEADER_BOTTOM_RADIUS = 40;
 const HOME_BALANCE_REVEAL_HEIGHT = 340;
 const CONTENT_SLIDE_DISTANCE = 48;
+const MORE_TO_HOME_CONTENT_SLIDE_DISTANCE = 28;
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 export default function HomeScreen() {
     const insets = useSafeAreaInsets();
+    const router = useRouter();
     const isFocused = useIsFocused();
     const tabTransition = useTabTransition();
     const headerMorph = useRef(new Animated.Value(0)).current;
+    const notificationCardRef = useRef<any>(null);
+    const isHomeTransitionTarget = tabTransition.to === "index" || tabTransition.to === null;
+    const fromTab = tabTransition.to === "index" ? tabTransition.from : null;
+    const isFromMore = fromTab === "more";
+    const [displayName, setDisplayName] = useState("Warga");
+
+    const openNotifications = () => {
+        const pushWithOrigin = (x: number, y: number, width: number, height: number) => {
+            setNotificationSourceTab("index");
+            router.push({
+                pathname: "/notifications",
+                params: {
+                    originX: `${x}`,
+                    originY: `${y}`,
+                    originW: `${width}`,
+                    originH: `${height}`,
+                    fromTab: "index",
+                },
+            });
+        };
+
+        const fallbackY = Platform.OS === "ios" ? insets.top + 145 : insets.top + 120;
+        const node = notificationCardRef.current as any;
+
+        if (node && typeof node.measureInWindow === "function") {
+            node.measureInWindow((x: number, y: number, width: number, height: number) => {
+                pushWithOrigin(x, y, width, height);
+            });
+            return;
+        }
+
+        pushWithOrigin(16, fallbackY, 340, 56);
+    };
 
     useEffect(() => {
-        if (isFocused) {
+        if (isFocused && isHomeTransitionTarget) {
+            const shouldSkipAnimation = consumeSkipAnimationForTab("index");
+
+            if (shouldSkipAnimation) {
+                headerMorph.stopAnimation();
+                headerMorph.setValue(1);
+                return;
+            }
+
             headerMorph.stopAnimation();
-            headerMorph.setValue(0);
+            headerMorph.setValue(isFromMore ? 0.2 : 0);
             Animated.timing(headerMorph, {
                 toValue: 1,
-                duration: 900,
+                duration: isFromMore ? 620 : 900,
                 easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                 useNativeDriver: false,
             }).start();
@@ -34,14 +80,44 @@ export default function HomeScreen() {
         }
 
         headerMorph.stopAnimation();
-        headerMorph.setValue(0);
-    }, [headerMorph, isFocused, tabTransition.from, tabTransition.to]);
+    }, [headerMorph, isFocused, isFromMore, isHomeTransitionTarget]);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadProfile = async () => {
+            try {
+                const session = await getPersistedSession();
+                if (!session) {
+                    return;
+                }
+
+                const me = await fetchMe(session.access_token);
+                if (!isMounted) {
+                    return;
+                }
+
+                const name = me.profile?.name?.trim();
+                if (name) {
+                    setDisplayName(name);
+                }
+            } catch {
+                // Keep fallback name when API is unavailable.
+            }
+        };
+
+        loadProfile();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     const homePaddingTop = Platform.OS === "ios" ? 60 : 50;
     const iuranPaddingTop = Platform.OS === "ios" ? insets.top + 16 : insets.top + 20;
     const layananPaddingTop = Platform.OS === "ios" ? insets.top + 14 : insets.top + 20;
-    const fromTab = tabTransition.to === "index" ? tabTransition.from : null;
-    const compactHeaderPaddingTop = fromTab === "layanan" ? layananPaddingTop : iuranPaddingTop;
+    const morePaddingTop = Platform.OS === "ios" ? insets.top + 18 : insets.top + 22;
+    const compactHeaderPaddingTop = fromTab === "layanan" ? layananPaddingTop : fromTab === "more" ? morePaddingTop : iuranPaddingTop;
+    const contentSlideDistance = isFromMore ? MORE_TO_HOME_CONTENT_SLIDE_DISTANCE : CONTENT_SLIDE_DISTANCE;
 
     const animatedHeaderContainerStyle = {
         marginHorizontal: headerMorph.interpolate({
@@ -105,7 +181,7 @@ export default function HomeScreen() {
             {
                 translateX: headerMorph.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [-CONTENT_SLIDE_DISTANCE, 0],
+                    outputRange: [-contentSlideDistance, 0],
                 }),
             },
         ],
@@ -139,11 +215,16 @@ export default function HomeScreen() {
                             {/* Header Section */}
                             <View style={styles.header}>
                                 <Text style={styles.welcomeText}>Welcome Back</Text>
-                                <Text style={styles.nameText}>Pak Budi Santoso</Text>
+                                <Text style={styles.nameText}>{displayName}</Text>
                             </View>
 
                             {/* Unpaid Dues Notification */}
-                            <TouchableOpacity style={styles.notificationCard} activeOpacity={0.9}>
+                            <TouchableOpacity
+                                ref={notificationCardRef}
+                                style={styles.notificationCard}
+                                activeOpacity={0.9}
+                                onPress={openNotifications}
+                            >
                                 <View style={styles.notificationLeft}>
                                     <View style={styles.badge}>
                                         <LinearGradient

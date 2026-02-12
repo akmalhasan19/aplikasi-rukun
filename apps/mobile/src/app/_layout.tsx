@@ -1,8 +1,9 @@
 import { useEventListener } from "expo";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, Easing, StyleSheet, View } from "react-native";
+import { cloneElement, useCallback, useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, Easing, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useVideoPlayer, VideoView } from "expo-video";
 
@@ -16,9 +17,13 @@ const SLIDE_UP_DURATION_MS = 520;
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function RootLayout() {
+    const [fontsLoaded] = useFonts({
+        Nunito: require("../../assets/fonts/Nunito-Variable.ttf"),
+    });
     const [showSplashOverlay, setShowSplashOverlay] = useState(true);
     const hasStartedPlaybackRef = useRef(false);
     const isFinishingRef = useRef(false);
+    const hasAppliedGlobalTypographyRef = useRef(false);
     const translateY = useRef(new Animated.Value(0)).current;
 
     const player = useVideoPlayer(SPLASH_VIDEO_SOURCE, (videoPlayer) => {
@@ -84,11 +89,78 @@ export default function RootLayout() {
         return () => clearTimeout(timeoutId);
     }, [finishSplash, showSplashOverlay]);
 
+    useEffect(() => {
+        if (!fontsLoaded || hasAppliedGlobalTypographyRef.current) {
+            return;
+        }
+
+        const textComponent = Text as any;
+        const textInputComponent = TextInput as any;
+
+        if (!textComponent.__nunitoPatched) {
+            const originalTextRender = textComponent.render;
+            textComponent.render = function patchedTextRender(...args: any[]) {
+                const originElement = originalTextRender.call(this, ...args);
+                if (!originElement || !originElement.props) {
+                    return originElement;
+                }
+
+                return cloneElement(originElement, {
+                    style: [{ fontFamily: "Nunito" }, originElement.props.style],
+                });
+            };
+            textComponent.__nunitoPatched = true;
+        }
+
+        if (!textInputComponent.__nunitoDefaultStyleApplied) {
+            textInputComponent.defaultProps = textInputComponent.defaultProps || {};
+            textInputComponent.defaultProps.style = [
+                { fontFamily: "Nunito" },
+                textInputComponent.defaultProps.style,
+            ];
+            textInputComponent.__nunitoDefaultStyleApplied = true;
+        }
+
+        hasAppliedGlobalTypographyRef.current = true;
+    }, [fontsLoaded]);
+
     return (
         <SafeAreaProvider>
             <View style={styles.root}>
-                <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false, animation: "none" }}>
+                <Stack initialRouteName="onboarding" screenOptions={{ headerShown: false, animation: "none" }}>
+                    <Stack.Screen name="onboarding" />
+                    <Stack.Screen
+                        name="login"
+                        options={{
+                            animation: "slide_from_right",
+                        }}
+                    />
+                    <Stack.Screen
+                        name="register"
+                        options={{
+                            animation: "slide_from_right",
+                        }}
+                    />
                     <Stack.Screen name="(tabs)" />
+                    <Stack.Screen
+                        name="notifications"
+                        options={{
+                            presentation: "transparentModal",
+                            animation: "none",
+                        }}
+                    />
+                    <Stack.Screen
+                        name="notification-settings"
+                        options={{
+                            animation: "slide_from_right",
+                        }}
+                    />
+                    <Stack.Screen
+                        name="account-settings"
+                        options={{
+                            animation: "slide_from_right",
+                        }}
+                    />
                     <Stack.Screen name="index" />
                     <Stack.Screen name="splash" />
                 </Stack>

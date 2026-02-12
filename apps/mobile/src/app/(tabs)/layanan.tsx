@@ -133,6 +133,9 @@ const TICKETS: TicketItem[] = [
 const LAYANAN_HEADER_TARGET_BOTTOM = 18;
 const HOME_TO_LAYANAN_START_BOTTOM = 220;
 const IURAN_TO_LAYANAN_START_BOTTOM = 8;
+const MORE_TO_LAYANAN_START_BOTTOM = 40;
+const MORE_TO_LAYANAN_CONTENT_SLIDE_DISTANCE = 24;
+const MORE_TO_LAYANAN_FAB_RISE = 16;
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 const AnimatedHeaderContainer = Animated.createAnimatedComponent(View);
 
@@ -152,6 +155,9 @@ export default function LayananScreen() {
     const insets = useSafeAreaInsets();
     const isFocused = useIsFocused();
     const tabTransition = useTabTransition();
+    const isLayananTransitionTarget = tabTransition.to === "layanan" || tabTransition.to === null;
+    const fromTab = tabTransition.to === "layanan" ? tabTransition.from : null;
+    const isFromMore = fromTab === "more";
     const pageAnim = useRef(new Animated.Value(0)).current;
     const headerMarginHorizontal = useRef(new Animated.Value(0)).current;
     const headerMarginTop = useRef(new Animated.Value(0)).current;
@@ -164,19 +170,23 @@ export default function LayananScreen() {
         const homePaddingTop = Platform.OS === "ios" ? 60 : 50;
         const iuranPaddingTop = Platform.OS === "ios" ? insets.top + 16 : insets.top + 20;
 
-        if (isFocused) {
-            const fromTab = tabTransition.to === "layanan" ? tabTransition.from : null;
+        if (isFocused && isLayananTransitionTarget) {
             const fromHome = fromTab === "index";
             const fromIuran = fromTab === "iuran";
+            const transitionDuration = isFromMore ? 620 : 520;
+            const pageStartValue = isFromMore ? 0.14 : 0;
+            const pageDuration = isFromMore ? 430 : 380;
 
-            const startMarginHorizontal = fromHome ? 8 : 0;
-            const startMarginTop = fromHome ? insets.top * 0.15 : 0;
-            const startTopRadius = fromHome ? 40 : 0;
-            const startPaddingTop = fromHome ? homePaddingTop : fromIuran ? iuranPaddingTop : layananPaddingTop;
+            const startMarginHorizontal = fromHome ? 8 : isFromMore ? 3 : 0;
+            const startMarginTop = fromHome ? insets.top * 0.15 : isFromMore ? insets.top * 0.05 : 0;
+            const startTopRadius = fromHome ? 40 : isFromMore ? 20 : 0;
+            const startPaddingTop = fromHome ? homePaddingTop : fromIuran ? iuranPaddingTop : isFromMore ? layananPaddingTop + 6 : layananPaddingTop;
             const startPaddingBottom = fromHome
                 ? HOME_TO_LAYANAN_START_BOTTOM
                 : fromIuran
                     ? IURAN_TO_LAYANAN_START_BOTTOM
+                    : isFromMore
+                        ? MORE_TO_LAYANAN_START_BOTTOM
                     : LAYANAN_HEADER_TARGET_BOTTOM;
 
             headerMarginHorizontal.stopAnimation();
@@ -194,41 +204,41 @@ export default function LayananScreen() {
             Animated.parallel([
                 Animated.timing(headerMarginHorizontal, {
                     toValue: 0,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
                 Animated.timing(headerMarginTop, {
                     toValue: 0,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
                 Animated.timing(headerTopRadius, {
                     toValue: 0,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
                 Animated.timing(headerPaddingTop, {
                     toValue: layananPaddingTop,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
                 Animated.timing(headerPaddingBottom, {
                     toValue: LAYANAN_HEADER_TARGET_BOTTOM,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
             ]).start();
 
             pageAnim.stopAnimation();
-            pageAnim.setValue(0);
+            pageAnim.setValue(pageStartValue);
             Animated.timing(pageAnim, {
                 toValue: 1,
-                duration: 380,
+                duration: pageDuration,
                 easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                 useNativeDriver: true,
             }).start();
@@ -250,6 +260,7 @@ export default function LayananScreen() {
         headerTopRadius,
         insets.top,
         isFocused,
+        isLayananTransitionTarget,
         tabTransition.from,
         tabTransition.to,
         pageAnim,
@@ -264,7 +275,7 @@ export default function LayananScreen() {
             {
                 translateX: pageAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [40, 0],
+                    outputRange: [isFromMore ? MORE_TO_LAYANAN_CONTENT_SLIDE_DISTANCE : 40, 0],
                 }),
             },
         ],
@@ -279,13 +290,13 @@ export default function LayananScreen() {
             {
                 translateY: pageAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [24, 0],
+                    outputRange: [isFromMore ? MORE_TO_LAYANAN_FAB_RISE : 24, 0],
                 }),
             },
             {
                 scale: pageAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [0.92, 1],
+                    outputRange: [isFromMore ? 0.96 : 0.92, 1],
                 }),
             },
         ],

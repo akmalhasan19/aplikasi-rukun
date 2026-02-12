@@ -5,7 +5,9 @@ import { StatusBar } from "expo-status-bar";
 import { Animated, Easing, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useTabTransition } from "./tab-transition";
+import { consumeSkipAnimationForTab, setNotificationSourceTab } from "../notification-navigation-state";
 
 const PAID_RESIDENTS = [
     { id: "1", colors: ["#0F766E", "#5EEAD4"] as const },
@@ -45,16 +47,70 @@ const HEADER_TOP_RADIUS = 40;
 const HEADER_BOTTOM_RADIUS = 40;
 const HOME_LIKE_HEADER_PADDING_BOTTOM = 220;
 const LAYANAN_LIKE_HEADER_PADDING_BOTTOM = 18;
+const MORE_LIKE_HEADER_PADDING_BOTTOM = 32;
 const IURAN_HEADER_PADDING_BOTTOM = 8;
 const HOME_LIKE_BALANCE_MARGIN_TOP = -208;
+const MORE_LIKE_BALANCE_MARGIN_TOP = -56;
 const IURAN_BALANCE_MARGIN_TOP = 12;
 const CONTENT_SLIDE_DISTANCE = 48;
+const MORE_TO_IURAN_CONTENT_SLIDE_DISTANCE = 30;
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+const PROGRESS_LOW_START = "#FF7E5F";
+const PROGRESS_LOW_END = "#FEB47B";
+const PROGRESS_HIGH_START = "#10B981";
+const PROGRESS_HIGH_END = "#34D399";
+
+function clamp(value: number, min: number, max: number) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function hexToRgb(hex: string) {
+    const sanitized = hex.replace("#", "");
+    const normalized = sanitized.length === 3
+        ? sanitized.split("").map((char) => `${char}${char}`).join("")
+        : sanitized;
+
+    return {
+        r: Number.parseInt(normalized.slice(0, 2), 16),
+        g: Number.parseInt(normalized.slice(2, 4), 16),
+        b: Number.parseInt(normalized.slice(4, 6), 16),
+    };
+}
+
+function rgbToHex(r: number, g: number, b: number) {
+    const toHex = (channel: number) => channel.toString(16).padStart(2, "0");
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function mixHexColor(fromHex: string, toHex: string, progress: number) {
+    const t = clamp(progress, 0, 1);
+    const from = hexToRgb(fromHex);
+    const to = hexToRgb(toHex);
+
+    const mixedR = Math.round(from.r + (to.r - from.r) * t);
+    const mixedG = Math.round(from.g + (to.g - from.g) * t);
+    const mixedB = Math.round(from.b + (to.b - from.b) * t);
+
+    return rgbToHex(mixedR, mixedG, mixedB);
+}
+
+function getProgressGradientColors(progressPercent: number): [string, string] {
+    const progress = clamp(progressPercent, 0, 100) / 100;
+    return [
+        mixHexColor(PROGRESS_LOW_START, PROGRESS_HIGH_START, progress),
+        mixHexColor(PROGRESS_LOW_END, PROGRESS_HIGH_END, progress),
+    ];
+}
 
 export default function IuranScreen() {
     const insets = useSafeAreaInsets();
+    const router = useRouter();
     const isFocused = useIsFocused();
     const tabTransition = useTabTransition();
+    const isIuranTransitionTarget = tabTransition.to === "iuran" || tabTransition.to === null;
+    const fromTab = tabTransition.to === "iuran" ? tabTransition.from : null;
+    const isFromMore = fromTab === "more";
+    const notificationCardRef = useRef<any>(null);
     const headerMarginHorizontal = useRef(new Animated.Value(0)).current;
     const headerMarginTop = useRef(new Animated.Value(0)).current;
     const headerTopRadius = useRef(new Animated.Value(0)).current;
@@ -68,21 +124,45 @@ export default function IuranScreen() {
         const homePaddingTop = Platform.OS === "ios" ? 60 : 50;
         const layananPaddingTop = Platform.OS === "ios" ? insets.top + 14 : insets.top + 20;
 
-        if (isFocused) {
-            const fromTab = tabTransition.to === "iuran" ? tabTransition.from : null;
+        if (isFocused && isIuranTransitionTarget) {
+            const shouldSkipAnimation = consumeSkipAnimationForTab("iuran");
+            if (shouldSkipAnimation) {
+                headerMarginHorizontal.stopAnimation();
+                headerMarginTop.stopAnimation();
+                headerTopRadius.stopAnimation();
+                headerPaddingTop.stopAnimation();
+                headerPaddingBottom.stopAnimation();
+                balanceCardMarginTop.stopAnimation();
+                pageAnim.stopAnimation();
+
+                headerMarginHorizontal.setValue(0);
+                headerMarginTop.setValue(0);
+                headerTopRadius.setValue(0);
+                headerPaddingTop.setValue(iuranPaddingTop);
+                headerPaddingBottom.setValue(IURAN_HEADER_PADDING_BOTTOM);
+                balanceCardMarginTop.setValue(IURAN_BALANCE_MARGIN_TOP);
+                pageAnim.setValue(1);
+                return;
+            }
+
             const fromHome = fromTab === "index";
             const fromLayanan = fromTab === "layanan";
+            const transitionDuration = isFromMore ? 620 : 520;
+            const pageStartValue = isFromMore ? 0.16 : 0;
+            const pageDuration = isFromMore ? 460 : 380;
 
-            const startMarginHorizontal = fromHome ? 8 : 0;
-            const startMarginTop = fromHome ? insets.top * 0.15 : 0;
-            const startTopRadius = fromHome ? HEADER_TOP_RADIUS : 0;
-            const startPaddingTop = fromHome ? homePaddingTop : fromLayanan ? layananPaddingTop : iuranPaddingTop;
+            const startMarginHorizontal = fromHome ? 8 : isFromMore ? 4 : 0;
+            const startMarginTop = fromHome ? insets.top * 0.15 : isFromMore ? insets.top * 0.08 : 0;
+            const startTopRadius = fromHome ? HEADER_TOP_RADIUS : isFromMore ? 24 : 0;
+            const startPaddingTop = fromHome ? homePaddingTop : fromLayanan ? layananPaddingTop : isFromMore ? iuranPaddingTop + 4 : iuranPaddingTop;
             const startPaddingBottom = fromHome
                 ? HOME_LIKE_HEADER_PADDING_BOTTOM
                 : fromLayanan
                     ? LAYANAN_LIKE_HEADER_PADDING_BOTTOM
+                    : isFromMore
+                        ? MORE_LIKE_HEADER_PADDING_BOTTOM
                     : IURAN_HEADER_PADDING_BOTTOM;
-            const startBalanceMarginTop = fromHome ? HOME_LIKE_BALANCE_MARGIN_TOP : IURAN_BALANCE_MARGIN_TOP;
+            const startBalanceMarginTop = fromHome ? HOME_LIKE_BALANCE_MARGIN_TOP : isFromMore ? MORE_LIKE_BALANCE_MARGIN_TOP : IURAN_BALANCE_MARGIN_TOP;
 
             headerMarginHorizontal.stopAnimation();
             headerMarginTop.stopAnimation();
@@ -101,47 +181,47 @@ export default function IuranScreen() {
             Animated.parallel([
                 Animated.timing(headerMarginHorizontal, {
                     toValue: 0,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
                 Animated.timing(headerMarginTop, {
                     toValue: 0,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
                 Animated.timing(headerTopRadius, {
                     toValue: 0,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
                 Animated.timing(headerPaddingTop, {
                     toValue: iuranPaddingTop,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
                 Animated.timing(headerPaddingBottom, {
                     toValue: IURAN_HEADER_PADDING_BOTTOM,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
                 Animated.timing(balanceCardMarginTop, {
                     toValue: IURAN_BALANCE_MARGIN_TOP,
-                    duration: 520,
+                    duration: transitionDuration,
                     easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                     useNativeDriver: false,
                 }),
             ]).start();
 
             pageAnim.stopAnimation();
-            pageAnim.setValue(0);
+            pageAnim.setValue(pageStartValue);
             Animated.timing(pageAnim, {
                 toValue: 1,
-                duration: 380,
+                duration: pageDuration,
                 easing: Easing.bezier(0.22, 0.8, 0.22, 1),
                 useNativeDriver: true,
             }).start();
@@ -164,6 +244,7 @@ export default function IuranScreen() {
         headerTopRadius,
         insets.top,
         isFocused,
+        isIuranTransitionTarget,
         tabTransition.from,
         tabTransition.to,
         pageAnim,
@@ -186,6 +267,35 @@ export default function IuranScreen() {
     const animatedBalanceCardWrapperStyle = {
         marginTop: balanceCardMarginTop,
     };
+    const progressGradientColors = getProgressGradientColors(COLLECTIVE_PROGRESS);
+
+    const openNotifications = () => {
+        const pushWithOrigin = (x: number, y: number, width: number, height: number) => {
+            setNotificationSourceTab("iuran");
+            router.push({
+                pathname: "/notifications",
+                params: {
+                    originX: `${x}`,
+                    originY: `${y}`,
+                    originW: `${width}`,
+                    originH: `${height}`,
+                    fromTab: "iuran",
+                },
+            });
+        };
+
+        const fallbackY = Platform.OS === "ios" ? insets.top + 130 : insets.top + 112;
+        const node = notificationCardRef.current as any;
+
+        if (node && typeof node.measureInWindow === "function") {
+            node.measureInWindow((x: number, y: number, width: number, height: number) => {
+                pushWithOrigin(x, y, width, height);
+            });
+            return;
+        }
+
+        pushWithOrigin(16, fallbackY, 340, 56);
+    };
 
     const animatedContentWrapperStyle = {
         opacity: pageAnim.interpolate({
@@ -196,7 +306,7 @@ export default function IuranScreen() {
             {
                 translateX: pageAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [CONTENT_SLIDE_DISTANCE, 0],
+                    outputRange: [isFromMore ? MORE_TO_IURAN_CONTENT_SLIDE_DISTANCE : CONTENT_SLIDE_DISTANCE, 0],
                 }),
             },
         ],
@@ -227,7 +337,12 @@ export default function IuranScreen() {
                                 <Text style={styles.nameText}>Manajemen Iuran</Text>
                             </View>
 
-                            <TouchableOpacity style={styles.notificationCard} activeOpacity={0.9}>
+                            <TouchableOpacity
+                                ref={notificationCardRef}
+                                style={styles.notificationCard}
+                                activeOpacity={0.9}
+                                onPress={openNotifications}
+                            >
                                 <View style={styles.notificationLeft}>
                                     <View style={styles.badge}>
                                         <LinearGradient
@@ -349,7 +464,7 @@ export default function IuranScreen() {
                         </View>
                         <View style={styles.progressTrack}>
                             <LinearGradient
-                                colors={["#FF7E5F", "#FEB47B"]}
+                                colors={progressGradientColors}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
                                 style={[styles.progressFill, { width: `${COLLECTIVE_PROGRESS}%` }]}
