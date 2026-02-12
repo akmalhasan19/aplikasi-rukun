@@ -91,6 +91,7 @@ export default function RootLayout() {
                     <Stack.Screen name="(tabs)" />
                     <Stack.Screen name="index" />
                     <Stack.Screen name="splash" />
+                    <Stack.Screen name="auth" />
                 </Stack>
 
                 {showSplashOverlay ? (
