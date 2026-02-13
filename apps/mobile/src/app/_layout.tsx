@@ -141,6 +141,12 @@ export default function RootLayout() {
                             animation: "slide_from_right",
                         }}
                     />
+                    <Stack.Screen
+                        name="forgot-password"
+                        options={{
+                            animation: "slide_from_right",
+                        }}
+                    />
                     <Stack.Screen name="(tabs)" />
                     <Stack.Screen
                         name="notifications"

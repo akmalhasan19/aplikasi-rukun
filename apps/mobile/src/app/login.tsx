@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Image,
@@ -17,24 +17,181 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ApiError } from "../services/api";
-import { fetchMe, loginWithBackend, persistSession } from "../services/auth";
+import { fetchMe, loginWithBackend, loginWithGoogle, persistSession, registerWithBackend } from "../services/auth";
 
 const AUTH_HERO_URI =
     "https://lh3.googleusercontent.com/aida-public/AB6AXuDzssszQGsaRBh_KJwrhTISHHX_vheuzB0VO0O2C48ahRDMSokWbaRBLkVtr3EgvW-WiJVaZTVLxJxTvvoDphmt9L6faMHghF-UcLdprwfQuAHdqwkc5ItRjfRl07B8pDlYVxMtefBj6BttEmaNaxC73hMgIIzsCUoR9W0BdRfp4vam98tx3-mKOCidcfv90XTkdN2-EiJP1_BT_tLd0QYjR9PQ23qUVWkMpDlfjf4UIm3tfyC0W0tBpHgG4e5-U1kKXmNYQ1U5RYQZ";
 const GOOGLE_ICON_URI = "https://www.gstatic.com/images/branding/googleg/1x/googleg_standard_color_128dp.png";
+const ENABLE_GOOGLE_LOGIN = false;
+
+type AuthTab = "login" | "register";
+type ValidationIssueLike = {
+    path?: unknown;
+    message?: unknown;
+};
+
+const LOGIN_DICTIONARY = {
+    id: {
+        hero: {
+            titlePrefix: "Sapa Warga",
+            titleAccent: "RT/RW",
+            subtitle: "Jadilah bagian dari komunitas yang aman,\nnyaman, dan saling peduli.",
+        },
+        tabs: {
+            login: "Masuk",
+            register: "Daftar",
+        },
+        loginForm: {
+            emailLabel: "EMAIL",
+            emailPlaceholder: "nama@email.com",
+            passwordLabel: "KATA SANDI",
+            passwordPlaceholder: "********",
+            forgotPassword: "Lupa Password?",
+        },
+        registerForm: {
+            nameLabel: "Nama Lengkap",
+            namePlaceholder: "Contoh: Budi Santoso",
+            emailLabel: "Email",
+            emailPlaceholder: "nama@email.com",
+            phoneLabel: "Nomor WhatsApp",
+            phonePlaceholder: "0812xxxx",
+            regionLabel: "Pilih Wilayah RT/RW",
+            regionPlaceholder: "Ketuk untuk pilih RT Anda...",
+            helpText: "Tidak tahu RT Anda? ",
+            helpLink: "Tanya Admin",
+            passwordLabel: "Kata Sandi",
+            passwordPlaceholder: "Minimal 6 karakter",
+        },
+        actions: {
+            processing: "Memproses...",
+            loginNow: "Masuk Sekarang",
+            registerNow: "Daftar Sekarang",
+        },
+        social: {
+            divider: "ATAU MASUK DENGAN",
+            google: "Google",
+        },
+        accountPrompt: {
+            noAccount: "Belum punya akun? ",
+            registerCitizen: "Daftar Warga",
+            alreadyRegistered: "Sudah jadi warga terdaftar? ",
+            login: "Login",
+        },
+        errors: {
+            loginRequired: "Email dan kata sandi wajib diisi.",
+            loginSessionMissing: "Session login tidak tersedia. Coba lagi.",
+            loginEmailInvalid: "Format email tidak valid.",
+            loginPasswordInvalid: "Kata sandi minimal 6 karakter.",
+            loginFailed: "Gagal masuk. Periksa koneksi dan coba lagi.",
+            registerRequired: "Nama, email, dan kata sandi wajib diisi.",
+            registerNameInvalid: "Nama minimal 2 karakter.",
+            registerEmailInvalid: "Format email tidak valid.",
+            registerPhoneInvalid: "Nomor WhatsApp harus berisi 8-30 digit.",
+            registerPasswordInvalid: "Kata sandi minimal 6 karakter.",
+            registerCheckEmail: "Akun berhasil dibuat. Cek email verifikasi lalu login.",
+            registerFailed: "Gagal daftar. Periksa koneksi dan coba lagi.",
+            googleSessionMissing: "Session Google tidak tersedia. Coba lagi.",
+            googleFailed: "Gagal masuk dengan Google. Coba lagi.",
+            validationGeneric: "Data belum valid. Mohon periksa input kamu.",
+        },
+    },
+} as const;
+
+const parseTabParam = (value: string | string[] | undefined): AuthTab => {
+    const normalized = Array.isArray(value) ? value[0] : value;
+    if (normalized === "register" || normalized === "daftar") {
+        return "register";
+    }
+
+    return "login";
+};
+
+const resolveValidationField = (rawIssue: ValidationIssueLike): string | null => {
+    if (!Array.isArray(rawIssue.path) || rawIssue.path.length === 0) {
+        return null;
+    }
+
+    const field = rawIssue.path[0];
+    return typeof field === "string" ? field : null;
+};
+
+const resolveValidationMessage = (error: ApiError, tab: AuthTab, t: (typeof LOGIN_DICTIONARY)["id"]) => {
+    if (Array.isArray(error.details)) {
+        for (const item of error.details) {
+            if (!item || typeof item !== "object") {
+                continue;
+            }
+
+            const issue = item as ValidationIssueLike;
+            const field = resolveValidationField(issue);
+
+            if (field === "email") {
+                return tab === "login" ? t.errors.loginEmailInvalid : t.errors.registerEmailInvalid;
+            }
+
+            if (field === "password") {
+                return tab === "login" ? t.errors.loginPasswordInvalid : t.errors.registerPasswordInvalid;
+            }
+
+            if (field === "name") {
+                return t.errors.registerNameInvalid;
+            }
+
+            if (field === "phone") {
+                return t.errors.registerPhoneInvalid;
+            }
+
+            if (typeof issue.message === "string" && issue.message.trim().length > 0) {
+                return issue.message;
+            }
+        }
+    }
+
+    if (error.message === "Validation error") {
+        return t.errors.validationGeneric;
+    }
+
+    return error.message;
+};
 
 export default function LoginScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
+    const { tab } = useLocalSearchParams<{ tab?: string | string[] }>();
+    const t = LOGIN_DICTIONARY.id;
+
+    const [activeTab, setActiveTab] = useState<AuthTab>(() => parseTabParam(tab));
+
+    const [loginEmail, setLoginEmail] = useState("");
+    const [loginPassword, setLoginPassword] = useState("");
+    const [isLoginPasswordVisible, setIsLoginPasswordVisible] = useState(false);
+
+    const [registerName, setRegisterName] = useState("");
+    const [registerEmail, setRegisterEmail] = useState("");
+    const [registerPhone, setRegisterPhone] = useState("");
+    const [registerPassword, setRegisterPassword] = useState("");
+    const [isRegisterPasswordVisible, setIsRegisterPasswordVisible] = useState(false);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+    useEffect(() => {
+        const parsedTab = parseTabParam(tab);
+        setActiveTab((currentTab) => (currentTab === parsedTab ? currentTab : parsedTab));
+    }, [tab]);
+
+    const selectTab = (nextTab: AuthTab) => {
+        if (isSubmitting || nextTab === activeTab) {
+            return;
+        }
+
+        setErrorMessage(null);
+        setActiveTab(nextTab);
+    };
+
     const handleLogin = async () => {
-        if (!email.trim() || !password.trim()) {
-            setErrorMessage("Email dan kata sandi wajib diisi.");
+        if (!loginEmail.trim() || !loginPassword.trim()) {
+            setErrorMessage(t.errors.loginRequired);
             return;
         }
 
@@ -43,12 +200,12 @@ export default function LoginScreen() {
             setErrorMessage(null);
 
             const authPayload = await loginWithBackend({
-                email: email.trim(),
-                password,
+                email: loginEmail.trim(),
+                password: loginPassword,
             });
 
             if (!authPayload.session) {
-                setErrorMessage("Session login tidak tersedia. Coba lagi.");
+                setErrorMessage(t.errors.loginSessionMissing);
                 return;
             }
 
@@ -57,11 +214,74 @@ export default function LoginScreen() {
             router.replace("/(tabs)");
         } catch (error) {
             if (error instanceof ApiError) {
-                setErrorMessage(error.message);
+                setErrorMessage(resolveValidationMessage(error, "login", t));
                 return;
             }
 
-            setErrorMessage("Gagal masuk. Periksa koneksi dan coba lagi.");
+            setErrorMessage(t.errors.loginFailed);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleRegister = async () => {
+        if (!registerName.trim() || !registerEmail.trim() || !registerPassword.trim()) {
+            setErrorMessage(t.errors.registerRequired);
+            return;
+        }
+
+        try {
+            setIsSubmitting(true);
+            setErrorMessage(null);
+
+            const authPayload = await registerWithBackend({
+                name: registerName.trim(),
+                email: registerEmail.trim(),
+                password: registerPassword,
+                phone: registerPhone.trim() || undefined,
+            });
+
+            if (!authPayload.session) {
+                setErrorMessage(t.errors.registerCheckEmail);
+                return;
+            }
+
+            await persistSession(authPayload.session);
+            await fetchMe(authPayload.session.access_token);
+            router.replace("/(tabs)");
+        } catch (error) {
+            if (error instanceof ApiError) {
+                setErrorMessage(resolveValidationMessage(error, "register", t));
+                return;
+            }
+
+            setErrorMessage(t.errors.registerFailed);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleGoogleLogin = async () => {
+        try {
+            setIsSubmitting(true);
+            setErrorMessage(null);
+
+            const authPayload = await loginWithGoogle();
+            if (!authPayload.session) {
+                setErrorMessage(t.errors.googleSessionMissing);
+                return;
+            }
+
+            await persistSession(authPayload.session);
+            await fetchMe(authPayload.session.access_token);
+            router.replace("/(tabs)");
+        } catch (error) {
+            if (error instanceof ApiError) {
+                setErrorMessage(resolveValidationMessage(error, "login", t));
+                return;
+            }
+
+            setErrorMessage(t.errors.googleFailed);
         } finally {
             setIsSubmitting(false);
         }
@@ -96,73 +316,173 @@ export default function LoginScreen() {
                         </View>
 
                         <Text style={styles.title}>
-                            Sapa Warga <Text style={styles.titleAccent}>RT/RW</Text>
+                            {t.hero.titlePrefix} <Text style={styles.titleAccent}>{t.hero.titleAccent}</Text>
                         </Text>
-                        <Text style={styles.subtitle}>
-                            Jadilah bagian dari komunitas yang aman,{"\n"}
-                            nyaman, dan saling peduli.
-                        </Text>
+                        <Text style={styles.subtitle}>{t.hero.subtitle}</Text>
 
                         <View style={styles.segmentRow}>
-                            <TouchableOpacity activeOpacity={0.9} style={[styles.segmentButton, styles.segmentButtonActive]}>
-                                <Text style={[styles.segmentText, styles.segmentTextActive]}>Masuk</Text>
+                            <TouchableOpacity
+                                activeOpacity={0.9}
+                                style={[styles.segmentButton, activeTab === "login" ? styles.segmentButtonActive : null]}
+                                onPress={() => selectTab("login")}
+                                disabled={isSubmitting}
+                            >
+                                <Text style={[styles.segmentText, activeTab === "login" ? styles.segmentTextActive : null]}>
+                                    {t.tabs.login}
+                                </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 activeOpacity={0.85}
-                                style={styles.segmentButton}
-                                onPress={() => router.push("/register")}
+                                style={[styles.segmentButton, activeTab === "register" ? styles.segmentButtonActive : null]}
+                                onPress={() => selectTab("register")}
                                 disabled={isSubmitting}
                             >
-                                <Text style={styles.segmentText}>Daftar</Text>
+                                <Text style={[styles.segmentText, activeTab === "register" ? styles.segmentTextActive : null]}>
+                                    {t.tabs.register}
+                                </Text>
                             </TouchableOpacity>
                         </View>
 
                         <View style={styles.formBlock}>
-                            <Text style={styles.fieldLabel}>EMAIL</Text>
-                            <View style={styles.inputWrap}>
-                                <Ionicons name="mail-outline" size={24} color="#E2A445" />
-                                <TextInput
-                                    placeholder="nama@email.com"
-                                    placeholderTextColor="#9AA3B1"
-                                    style={styles.textInput}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    editable={!isSubmitting}
-                                />
-                            </View>
+                            {activeTab === "login" ? (
+                                <>
+                                    <Text style={styles.fieldLabel}>{t.loginForm.emailLabel}</Text>
+                                    <View style={styles.inputWrap}>
+                                        <Ionicons name="mail-outline" size={24} color="#E2A445" />
+                                        <TextInput
+                                            placeholder={t.loginForm.emailPlaceholder}
+                                            placeholderTextColor="#9AA3B1"
+                                            style={styles.textInput}
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
+                                            autoCorrect={false}
+                                            value={loginEmail}
+                                            onChangeText={setLoginEmail}
+                                            editable={!isSubmitting}
+                                        />
+                                    </View>
 
-                            <Text style={styles.fieldLabel}>KATA SANDI</Text>
-                            <View style={styles.inputWrap}>
-                                <Ionicons name="lock-closed-outline" size={24} color="#E2A445" />
-                                <TextInput
-                                    placeholder="********"
-                                    placeholderTextColor="#9AA3B1"
-                                    style={styles.textInput}
-                                    secureTextEntry={!isPasswordVisible}
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    editable={!isSubmitting}
-                                />
-                                <TouchableOpacity
-                                    style={styles.trailingIconButton}
-                                    onPress={() => setIsPasswordVisible((value) => !value)}
-                                    activeOpacity={0.8}
-                                    disabled={isSubmitting}
-                                >
-                                    <Ionicons
-                                        name={isPasswordVisible ? "eye-outline" : "eye-off-outline"}
-                                        size={24}
-                                        color="#A2A9B6"
-                                    />
-                                </TouchableOpacity>
-                            </View>
+                                    <Text style={styles.fieldLabel}>{t.loginForm.passwordLabel}</Text>
+                                    <View style={styles.inputWrap}>
+                                        <Ionicons name="lock-closed-outline" size={24} color="#E2A445" />
+                                        <TextInput
+                                            placeholder={t.loginForm.passwordPlaceholder}
+                                            placeholderTextColor="#9AA3B1"
+                                            style={styles.textInput}
+                                            secureTextEntry={!isLoginPasswordVisible}
+                                            value={loginPassword}
+                                            onChangeText={setLoginPassword}
+                                            editable={!isSubmitting}
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.trailingIconButton}
+                                            onPress={() => setIsLoginPasswordVisible((value) => !value)}
+                                            activeOpacity={0.8}
+                                            disabled={isSubmitting}
+                                        >
+                                            <Ionicons
+                                                name={isLoginPasswordVisible ? "eye-outline" : "eye-off-outline"}
+                                                size={24}
+                                                color="#A2A9B6"
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
 
-                            <TouchableOpacity activeOpacity={0.8} style={styles.forgotRow} disabled={isSubmitting}>
-                                <Text style={styles.forgotText}>Lupa Password?</Text>
-                            </TouchableOpacity>
+                                    <TouchableOpacity
+                                        activeOpacity={0.8}
+                                        style={styles.forgotRow}
+                                        disabled={isSubmitting}
+                                        onPress={() => router.push("/forgot-password")}
+                                    >
+                                        <Text style={styles.forgotText}>{t.loginForm.forgotPassword}</Text>
+                                    </TouchableOpacity>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={styles.fieldLabel}>{t.registerForm.nameLabel}</Text>
+                                    <View style={styles.inputWrap}>
+                                        <Ionicons name="person" size={24} color="#E2A445" />
+                                        <TextInput
+                                            placeholder={t.registerForm.namePlaceholder}
+                                            placeholderTextColor="#9AA3B1"
+                                            style={styles.textInput}
+                                            value={registerName}
+                                            onChangeText={setRegisterName}
+                                            editable={!isSubmitting}
+                                        />
+                                    </View>
+
+                                    <Text style={styles.fieldLabel}>{t.registerForm.emailLabel}</Text>
+                                    <View style={styles.inputWrap}>
+                                        <Ionicons name="mail-outline" size={24} color="#E2A445" />
+                                        <TextInput
+                                            placeholder={t.registerForm.emailPlaceholder}
+                                            placeholderTextColor="#9AA3B1"
+                                            keyboardType="email-address"
+                                            autoCapitalize="none"
+                                            autoCorrect={false}
+                                            style={styles.textInput}
+                                            value={registerEmail}
+                                            onChangeText={setRegisterEmail}
+                                            editable={!isSubmitting}
+                                        />
+                                    </View>
+
+                                    <Text style={styles.fieldLabel}>{t.registerForm.phoneLabel}</Text>
+                                    <View style={styles.inputWrap}>
+                                        <Ionicons name="chatbox-outline" size={24} color="#E2A445" />
+                                        <TextInput
+                                            placeholder={t.registerForm.phonePlaceholder}
+                                            placeholderTextColor="#9AA3B1"
+                                            keyboardType="phone-pad"
+                                            style={styles.textInput}
+                                            value={registerPhone}
+                                            onChangeText={setRegisterPhone}
+                                            editable={!isSubmitting}
+                                        />
+                                    </View>
+
+                                    <Text style={styles.fieldLabel}>{t.registerForm.regionLabel}</Text>
+                                    <TouchableOpacity style={styles.inputWrap} activeOpacity={0.84} disabled>
+                                        <Ionicons name="location-outline" size={24} color="#E2A445" />
+                                        <Text style={styles.dropdownPlaceholder}>{t.registerForm.regionPlaceholder}</Text>
+                                        <Ionicons name="chevron-down" size={24} color="#A2A9B6" />
+                                    </TouchableOpacity>
+
+                                    <View style={styles.helpRow}>
+                                        <Text style={styles.helpText}>{t.registerForm.helpText}</Text>
+                                        <TouchableOpacity activeOpacity={0.84} disabled={isSubmitting}>
+                                            <Text style={styles.helpLink}>{t.registerForm.helpLink}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <Text style={styles.fieldLabel}>{t.registerForm.passwordLabel}</Text>
+                                    <View style={styles.inputWrap}>
+                                        <Ionicons name="lock-closed-outline" size={24} color="#E2A445" />
+                                        <TextInput
+                                            placeholder={t.registerForm.passwordPlaceholder}
+                                            placeholderTextColor="#9AA3B1"
+                                            secureTextEntry={!isRegisterPasswordVisible}
+                                            style={styles.textInput}
+                                            value={registerPassword}
+                                            onChangeText={setRegisterPassword}
+                                            editable={!isSubmitting}
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.trailingIconButton}
+                                            onPress={() => setIsRegisterPasswordVisible((value) => !value)}
+                                            activeOpacity={0.8}
+                                            disabled={isSubmitting}
+                                        >
+                                            <Ionicons
+                                                name={isRegisterPasswordVisible ? "eye-outline" : "eye-off-outline"}
+                                                size={24}
+                                                color="#A2A9B6"
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+                                </>
+                            )}
                         </View>
 
                         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
@@ -170,7 +490,7 @@ export default function LoginScreen() {
                         <TouchableOpacity
                             style={[styles.loginButton, isSubmitting ? styles.loginButtonDisabled : null]}
                             activeOpacity={0.9}
-                            onPress={handleLogin}
+                            onPress={activeTab === "login" ? handleLogin : handleRegister}
                             disabled={isSubmitting}
                         >
                             <LinearGradient
@@ -179,7 +499,13 @@ export default function LoginScreen() {
                                 end={{ x: 1, y: 0.5 }}
                                 style={styles.loginButtonGradient}
                             >
-                                <Text style={styles.loginButtonText}>{isSubmitting ? "Memproses..." : "Masuk Sekarang"}</Text>
+                                <Text style={styles.loginButtonText}>
+                                    {isSubmitting
+                                        ? t.actions.processing
+                                        : activeTab === "login"
+                                          ? t.actions.loginNow
+                                          : t.actions.registerNow}
+                                </Text>
                                 {isSubmitting ? (
                                     <ActivityIndicator color="#FFFFFF" />
                                 ) : (
@@ -188,23 +514,47 @@ export default function LoginScreen() {
                             </LinearGradient>
                         </TouchableOpacity>
 
-                        <View style={styles.dividerRow}>
-                            <View style={styles.dividerLine} />
-                            <Text style={styles.dividerText}>ATAU MASUK DENGAN</Text>
-                            <View style={styles.dividerLine} />
-                        </View>
+                        {activeTab === "login" ? (
+                            <>
+                                {ENABLE_GOOGLE_LOGIN ? (
+                                    <>
+                                        <View style={styles.dividerRow}>
+                                            <View style={styles.dividerLine} />
+                                            <Text style={styles.dividerText}>{t.social.divider}</Text>
+                                            <View style={styles.dividerLine} />
+                                        </View>
 
-                        <TouchableOpacity style={styles.googleButton} activeOpacity={0.86} disabled={isSubmitting}>
-                            <Image source={{ uri: GOOGLE_ICON_URI }} style={styles.googleIcon} resizeMode="contain" />
-                            <Text style={styles.googleText}>Google</Text>
-                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.googleButton}
+                                            activeOpacity={0.86}
+                                            onPress={handleGoogleLogin}
+                                            disabled={isSubmitting}
+                                        >
+                                            <Image source={{ uri: GOOGLE_ICON_URI }} style={styles.googleIcon} resizeMode="contain" />
+                                            <Text style={styles.googleText}>{t.social.google}</Text>
+                                        </TouchableOpacity>
+                                    </>
+                                ) : null}
 
-                        <View style={styles.registerRow}>
-                            <Text style={styles.registerText}>Belum punya akun? </Text>
-                            <TouchableOpacity activeOpacity={0.85} onPress={() => router.push("/register")} disabled={isSubmitting}>
-                                <Text style={styles.registerLink}>Daftar Warga</Text>
-                            </TouchableOpacity>
-                        </View>
+                                <View style={styles.registerRow}>
+                                    <Text style={styles.registerText}>{t.accountPrompt.noAccount}</Text>
+                                    <TouchableOpacity
+                                        activeOpacity={0.85}
+                                        onPress={() => selectTab("register")}
+                                        disabled={isSubmitting}
+                                    >
+                                        <Text style={styles.registerLink}>{t.accountPrompt.registerCitizen}</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </>
+                        ) : (
+                            <View style={styles.registerRow}>
+                                <Text style={styles.registerText}>{t.accountPrompt.alreadyRegistered}</Text>
+                                <TouchableOpacity activeOpacity={0.85} onPress={() => selectTab("login")} disabled={isSubmitting}>
+                                    <Text style={styles.registerLink}>{t.accountPrompt.login}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
 
                         <View style={styles.bottomArc} />
                     </View>
@@ -322,7 +672,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: "900",
         color: "#3A445A",
-        letterSpacing: 1,
+        letterSpacing: 0.3,
     },
     inputWrap: {
         height: 70,
@@ -341,9 +691,30 @@ const styles = StyleSheet.create({
         color: "#374151",
         fontWeight: "700",
     },
+    dropdownPlaceholder: {
+        flex: 1,
+        fontSize: 16,
+        color: "#6B7280",
+        fontWeight: "700",
+    },
     trailingIconButton: {
         paddingLeft: 6,
         paddingVertical: 6,
+    },
+    helpRow: {
+        marginTop: 8,
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    helpText: {
+        fontSize: 14,
+        color: "#5D6676",
+        fontWeight: "700",
+    },
+    helpLink: {
+        fontSize: 14,
+        color: "#E49524",
+        fontWeight: "800",
     },
     forgotRow: {
         marginTop: 12,
@@ -375,14 +746,14 @@ const styles = StyleSheet.create({
         opacity: 0.7,
     },
     loginButtonGradient: {
-        height: 74,
-        paddingHorizontal: 26,
+        height: 62,
+        paddingHorizontal: 22,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
     },
     loginButtonText: {
-        fontSize: 21,
+        fontSize: 18,
         color: "#FFFFFF",
         fontWeight: "900",
     },
@@ -403,22 +774,22 @@ const styles = StyleSheet.create({
         fontWeight: "700",
     },
     googleButton: {
-        marginTop: 22,
-        height: 68,
+        marginTop: 18,
+        height: 56,
         borderRadius: 999,
         borderWidth: 2,
         borderColor: "#CED3DB",
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: 12,
+        gap: 10,
     },
     googleIcon: {
-        width: 28,
-        height: 28,
+        width: 22,
+        height: 22,
     },
     googleText: {
-        fontSize: 18,
+        fontSize: 16,
         color: "#17233B",
         fontWeight: "800",
     },

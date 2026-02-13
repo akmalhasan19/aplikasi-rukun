@@ -6,7 +6,6 @@ const apiBaseUrl = (process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_BASE_URL).re
 
 if (__DEV__ && !process.env.EXPO_PUBLIC_API_BASE_URL) {
     // Helpful when app runs on physical device but still uses emulator fallback URL.
-    // eslint-disable-next-line no-console
     console.warn(`[api] EXPO_PUBLIC_API_BASE_URL is not set, fallback in use: ${apiBaseUrl}`);
 }
 

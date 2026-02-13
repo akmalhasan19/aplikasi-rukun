@@ -44,7 +44,6 @@ const IURAN_HISTORY = [
     { id: "agu-2023", title: "Iuran Agustus", date: "09 Agu 2023" },
 ];
 const HEADER_TOP_RADIUS = 40;
-const HEADER_BOTTOM_RADIUS = 40;
 const HOME_LIKE_HEADER_PADDING_BOTTOM = 220;
 const LAYANAN_LIKE_HEADER_PADDING_BOTTOM = 18;
 const MORE_LIKE_HEADER_PADDING_BOTTOM = 32;

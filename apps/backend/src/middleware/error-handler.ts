@@ -34,7 +34,6 @@ export function errorHandler(error: unknown, _req: Request, res: Response, _next
 
     if (env.NODE_ENV !== "production") {
         // Keep raw error visible in development for faster debugging.
-        // eslint-disable-next-line no-console
         console.error(error);
     }
 

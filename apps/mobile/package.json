@@ -8,7 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "type-check": "node ../../node_modules/typescript/bin/tsc --noEmit",
-    "lint": "echo 'No linter configured'"
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"App.tsx\" \"index.ts\""
   },
   "dependencies": {
     "@aplikasi-rukun/shared": "*",
@@ -24,6 +24,7 @@
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-video": "~3.0.15",
+    "expo-web-browser": "^15.0.10",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "^2.30.0",
@@ -34,7 +35,11 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@eslint/js": "^9.36.0",
     "@types/react": "~19.1.0",
+    "eslint": "^9.36.0",
+    "globals": "^16.4.0",
+    "typescript-eslint": "^8.44.1",
     "typescript": "~5.9.2"
   },
   "private": true

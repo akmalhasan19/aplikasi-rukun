@@ -1,31 +1,31 @@
 {
-    "$schema": "https://turbo.build/schema.json",
-    "pipeline": {
-        "dev": {
-            "cache": false,
-            "persistent": true
-        },
-        "build": {
-            "dependsOn": [
-                "^build"
-            ],
-            "outputs": [
-                "dist/**",
-                ".next/**",
-                "public/dist/**"
-            ]
-        },
-        "lint": {
-            "outputs": []
-        },
-        "type-check": {
-            "outputs": []
-        },
-        "clean": {
-            "cache": false
-        },
-        "supabase:types": {
-            "cache": false
-        }
+  "$schema": "https://v2-8-7.turborepo.dev/schema.json",
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        ".next/**",
+        "public/dist/**"
+      ]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "type-check": {
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    },
+    "supabase:types": {
+      "cache": false
     }
+  }
 }

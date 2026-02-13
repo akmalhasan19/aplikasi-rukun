@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, Dimensions, Animated, Easing } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, Animated, Easing } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,7 +10,6 @@ import { useTabTransition } from "./tab-transition";
 import { consumeSkipAnimationForTab, setNotificationSourceTab } from "../notification-navigation-state";
 import { fetchMe, getPersistedSession } from "../../services/auth";
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const HEADER_TOP_RADIUS = 40;
 const HEADER_BOTTOM_RADIUS = 40;
 const HOME_BALANCE_REVEAL_HEIGHT = 340;
