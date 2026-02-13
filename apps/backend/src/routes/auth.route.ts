@@ -330,13 +330,12 @@ authRouter.post(
     requireAuth,
     route(async (req, res) => {
         const payload = forgotPasswordResetSchema.parse(req.body);
-        const accessToken = req.accessToken;
-        if (!accessToken) {
-            throw new HttpError(401, "Missing access token");
+        const user = req.authUser;
+        if (!user) {
+            throw new HttpError(401, "User tidak ditemukan.");
         }
 
-        const userClient = createSupabaseUserClient(accessToken);
-        const { data, error } = await userClient.auth.updateUser({
+        const { data, error } = await supabaseServiceRoleClient.auth.admin.updateUserById(user.id, {
             password: payload.password,
         });
 

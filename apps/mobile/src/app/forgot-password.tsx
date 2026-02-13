@@ -5,6 +5,7 @@ import { ApiError } from "../services/api";
 import { type BackendSession, resetForgotPassword, sendForgotPasswordOtp, verifyForgotPasswordOtp } from "../services/auth";
 
 type Step = "email" | "otp" | "reset";
+const PASSWORD_RESET_SUCCESS_NOTICE = "password-reset-success";
 
 type ValidationIssueLike = {
     path?: unknown;
@@ -138,17 +139,11 @@ export default function ForgotPasswordScreen() {
         try {
             setIsSubmitting(true);
             setErrorMessage(null);
-            const response = await resetForgotPassword({
+            await resetForgotPassword({
                 password: newPassword,
                 accessToken: recoverySession.access_token,
             });
-
-            setMessage(response.message || "Password berhasil diperbarui. Silakan login dengan password baru.");
-            setStep("email");
-            setOtpCode("");
-            setRecoverySession(null);
-            setNewPassword("");
-            setConfirmPassword("");
+            router.replace(`/login?tab=login&notice=${PASSWORD_RESET_SUCCESS_NOTICE}`);
         } catch (error) {
             if (error instanceof ApiError) {
                 const validationMessage = extractValidationMessage(error);
@@ -197,6 +192,7 @@ export default function ForgotPasswordScreen() {
                     <>
                         <Text style={styles.label}>Inputkan OTP Code</Text>
                         <TextInput
+                            key="otp-code-input"
                             value={otpCode}
                             onChangeText={(value) => setOtpCode(value.replace(/\D/g, "").slice(0, 10))}
                             placeholder="OTP Code"
@@ -219,22 +215,31 @@ export default function ForgotPasswordScreen() {
                     <>
                         <Text style={styles.label}>Buat kata sandi baru</Text>
                         <TextInput
+                            key="new-password-input"
                             value={newPassword}
                             onChangeText={setNewPassword}
                             placeholder="Kata sandi baru"
                             placeholderTextColor="#9CA3AF"
                             secureTextEntry
+                            keyboardType="default"
+                            textContentType="newPassword"
+                            autoComplete="password-new"
+                            autoFocus
                             autoCapitalize="none"
                             autoCorrect={false}
                             editable={!isSubmitting}
                             style={styles.input}
                         />
                         <TextInput
+                            key="confirm-password-input"
                             value={confirmPassword}
                             onChangeText={setConfirmPassword}
                             placeholder="Konfirmasi kata sandi baru"
                             placeholderTextColor="#9CA3AF"
                             secureTextEntry
+                            keyboardType="default"
+                            textContentType="newPassword"
+                            autoComplete="password-new"
                             autoCapitalize="none"
                             autoCorrect={false}
                             editable={!isSubmitting}

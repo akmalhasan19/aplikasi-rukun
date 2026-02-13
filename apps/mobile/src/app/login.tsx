@@ -25,6 +25,7 @@ const GOOGLE_ICON_URI = "https://www.gstatic.com/images/branding/googleg/1x/goog
 const ENABLE_GOOGLE_LOGIN = false;
 
 type AuthTab = "login" | "register";
+const PASSWORD_RESET_SUCCESS_NOTICE = "password-reset-success";
 type ValidationIssueLike = {
     path?: unknown;
     message?: unknown;
@@ -94,6 +95,9 @@ const LOGIN_DICTIONARY = {
             googleFailed: "Gagal masuk dengan Google. Coba lagi.",
             validationGeneric: "Data belum valid. Mohon periksa input kamu.",
         },
+        success: {
+            passwordReset: "Password berhasil direset. Silakan login dengan kata sandi baru.",
+        },
     },
 } as const;
 
@@ -104,6 +108,10 @@ const parseTabParam = (value: string | string[] | undefined): AuthTab => {
     }
 
     return "login";
+};
+
+const parseSingleParam = (value: string | string[] | undefined) => {
+    return Array.isArray(value) ? value[0] : value;
 };
 
 const resolveValidationField = (rawIssue: ValidationIssueLike): string | null => {
@@ -157,7 +165,7 @@ const resolveValidationMessage = (error: ApiError, tab: AuthTab, t: (typeof LOGI
 export default function LoginScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const { tab } = useLocalSearchParams<{ tab?: string | string[] }>();
+    const { tab, notice } = useLocalSearchParams<{ tab?: string | string[]; notice?: string | string[] }>();
     const t = LOGIN_DICTIONARY.id;
 
     const [activeTab, setActiveTab] = useState<AuthTab>(() => parseTabParam(tab));
@@ -173,6 +181,7 @@ export default function LoginScreen() {
     const [isRegisterPasswordVisible, setIsRegisterPasswordVisible] = useState(false);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     useEffect(() => {
@@ -180,12 +189,25 @@ export default function LoginScreen() {
         setActiveTab((currentTab) => (currentTab === parsedTab ? currentTab : parsedTab));
     }, [tab]);
 
+    useEffect(() => {
+        const parsedNotice = parseSingleParam(notice);
+        if (parsedNotice === PASSWORD_RESET_SUCCESS_NOTICE) {
+            setActiveTab("login");
+            setErrorMessage(null);
+            setSuccessMessage(t.success.passwordReset);
+            return;
+        }
+
+        setSuccessMessage(null);
+    }, [notice, t.success.passwordReset]);
+
     const selectTab = (nextTab: AuthTab) => {
         if (isSubmitting || nextTab === activeTab) {
             return;
         }
 
         setErrorMessage(null);
+        setSuccessMessage(null);
         setActiveTab(nextTab);
     };
 
@@ -198,6 +220,7 @@ export default function LoginScreen() {
         try {
             setIsSubmitting(true);
             setErrorMessage(null);
+            setSuccessMessage(null);
 
             const authPayload = await loginWithBackend({
                 email: loginEmail.trim(),
@@ -233,6 +256,7 @@ export default function LoginScreen() {
         try {
             setIsSubmitting(true);
             setErrorMessage(null);
+            setSuccessMessage(null);
 
             const authPayload = await registerWithBackend({
                 name: registerName.trim(),
@@ -265,6 +289,7 @@ export default function LoginScreen() {
         try {
             setIsSubmitting(true);
             setErrorMessage(null);
+            setSuccessMessage(null);
 
             const authPayload = await loginWithGoogle();
             if (!authPayload.session) {
@@ -485,6 +510,7 @@ export default function LoginScreen() {
                             )}
                         </View>
 
+                        {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
                         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
                         <TouchableOpacity
@@ -729,6 +755,13 @@ const styles = StyleSheet.create({
         marginTop: 14,
         fontSize: 13,
         color: "#B91C1C",
+        fontWeight: "700",
+        textAlign: "center",
+    },
+    successText: {
+        marginTop: 14,
+        fontSize: 13,
+        color: "#065F46",
         fontWeight: "700",
         textAlign: "center",
     },

@@ -26,6 +26,7 @@ const envSchema = z.object({
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
     RESEND_API_KEY: z.string().min(1).optional(),
     RESEND_FROM_EMAIL: z.string().email().optional(),
+    PLATFORM_ADMIN_EMAILS: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -41,5 +42,10 @@ export const env = {
     ...data,
     corsOrigins: data.CORS_ORIGINS
         ? data.CORS_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean)
+        : [],
+    platformAdminEmails: data.PLATFORM_ADMIN_EMAILS
+        ? data.PLATFORM_ADMIN_EMAILS.split(",")
+              .map((email) => email.trim().toLowerCase())
+              .filter(Boolean)
         : [],
 };

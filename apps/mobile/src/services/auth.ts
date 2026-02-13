@@ -35,9 +35,20 @@ type AuthPayload = {
     session: BackendSession | null;
 };
 
-type MePayload = {
+export type RegionalAdminRole = {
+    id: string;
+    role_scope: "RT" | "RW";
+    kelurahan: string;
+    rw: string;
+    rt: string;
+    created_at: string;
+};
+
+export type MePayload = {
     auth_user: AuthUser;
     profile: Profile | null;
+    is_platform_admin: boolean;
+    admin_roles: RegionalAdminRole[];
 };
 
 type UpdateMyProfilePayload = {
@@ -182,6 +193,31 @@ export async function fetchMe(accessToken: string) {
 export async function updateMyProfile(accessToken: string, payload: UpdateMyProfilePayload) {
     return apiRequest<UpdateMeResponse>("/users/me", {
         method: "PUT",
+        accessToken,
+        body: payload,
+    });
+}
+
+export async function assignRegionalAdminRole(
+    accessToken: string,
+    payload: {
+        targetEmail: string;
+        roleScope: "RT" | "RW";
+        kelurahan: string;
+        rw: string;
+        rt?: string;
+    },
+) {
+    return apiRequest<{
+        assignment: RegionalAdminRole & {
+            user_id: string;
+        };
+        target_user: {
+            id: string;
+            email: string | null;
+        };
+    }>("/users/admin-roles/assign", {
+        method: "POST",
         accessToken,
         body: payload,
     });
